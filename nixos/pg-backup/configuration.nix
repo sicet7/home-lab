@@ -47,7 +47,7 @@ in
   nix.settings = { sandbox = false; };  
   proxmoxLXC = {
     manageNetwork = false;
-    privileged = false;
+    privileged = true;
   };
   security.pam.services.sshd.allowNullPassword = true;
   services.openssh = {
