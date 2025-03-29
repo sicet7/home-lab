@@ -1,3 +1,4 @@
+# This nixos LXC need to be privileged, because NFS mounts does not work without.
 # Original config is from here: https://nixos.wiki/wiki/Proxmox_Linux_Container
 { config, modulesPath, pkgs, lib, ... }:
 let
