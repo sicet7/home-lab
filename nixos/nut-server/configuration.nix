@@ -50,7 +50,7 @@
         "vendorid = 0764"
         "productid = 0601"
         "pollinterval = 1"
-        "maxretry = 3"
+        "user = root"
       ];
     };
 
