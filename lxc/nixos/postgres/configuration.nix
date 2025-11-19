@@ -1,44 +1,61 @@
-# Original config is from here: https://nixos.wiki/wiki/Proxmox_Linux_Container
 { config, modulesPath, pkgs, lib, ... }:
 {
   imports = [ (modulesPath + "/virtualisation/proxmox-lxc.nix") ];
+
   nix.settings = { sandbox = false; };
+
   proxmoxLXC = {
     manageNetwork = false;
-    privileged = false;
+    privileged = true;
   };
-  security.pam.services.sshd.allowNullPassword = true;
+
+  security.pam.services.sshd.allowNullPassword = lib.mkForce false;
+  services.fstrim.enable = false;
   services.openssh = {
-    enable = true;
-    openFirewall = true;
-    settings = {
-        PermitRootLogin = "yes";
-        PasswordAuthentication = true;
-        PermitEmptyPasswords = "yes";
-    };
+    enable = false;
+    openFirewall = false;
   };
-  config.services.postgresql = {
+
+  services.resolved.extraConfig = ''
+    Cache=true
+    CacheFromLocalhost=true
+  '';
+
+  services.postgresql = {
     enable = true;
     enableTCPIP = true;
+
     package = pkgs.postgresql_17;
-    authentication = pkgs.lib.mkOverride 10 ''
-      # PostgreSQL Client Authentication Configuration File
+
+    extensions = ps: [ ps.vectorchord ];
+
+    settings.password_encryption = "scram-sha-256";
+
+    authentication = lib.mkForce ''
+      # Local socket connections
       local   all             postgres                                peer
-      # TYPE  DATABASE        USER            ADDRESS                 METHOD
-      # "local" is for Unix domain socket connections only
-      local   all             all                                     md5
-      # IPv4 local connections:
+      local   all             all                                     scram-sha-256
+
+      # IPv4 localhost
       host    all             all             127.0.0.1/32            scram-sha-256
-      host    all             all             0.0.0.0/24              md5
-      # IPv6 local connections:
+
+      # IPv6 localhost
       host    all             all             ::1/128                 scram-sha-256
-      host    all             all             0.0.0.0/0               md5
-      # Allow replication connections from localhost, by a user with the
-      # replication privilege.
+
+      # LAN: 10.25.25.0/24
+      host    all             all             10.25.25.0/24           scram-sha-256
+
+      # Replication
       local   replication     all                                     peer
       host    replication     all             127.0.0.1/32            scram-sha-256
       host    replication     all             ::1/128                 scram-sha-256
     '';
+
+    initialScript = pkgs.writeText "postgres-init.sql" ''
+        \c template1;
+        CREATE EXTENSION IF NOT EXISTS vectorchord;
+    '';
   };
-  system.stateVersion = "24.11";
+
+  system.stateVersion = "25.05";
 }
