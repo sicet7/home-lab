@@ -1,0 +1,2 @@
+CREATE ROLE uptime LOGIN PASSWORD 'your_secure_password';
+GRANT CONNECT ON DATABASE postgres TO uptime;

@@ -1,5 +1,9 @@
 { config, modulesPath, pkgs, lib, ... }: 
 let
+    mongoRootPassword = "rootPassword"; # Fill out the root password for mongodb (will be set to this)
+    mongoPassword = "userPassword"; # Fill out the unifi user password for mongodb (will be set to this)
+
+    # Init Js Script
     mongoInitJs = pkgs.writeText "init-mongo.js" ''
     const env = process.env;
     const authDb   = env.MONGO_AUTHSOURCE || "admin";
@@ -37,8 +41,6 @@ let
 
     print("Mongo init script completed.");
   '';
-    mongoRootPassword = "rootPassword";
-    mongoPassword = "userPassword";
 in
 { 
   imports = [ (modulesPath + "/virtualisation/proxmox-lxc.nix") ];

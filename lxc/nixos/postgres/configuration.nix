@@ -16,6 +16,12 @@
     openFirewall = false;
   };
 
+  networking.firewall = {
+    enable = true;
+    allowedTCPPorts = [ 5432 ];
+    allowedUDPPorts = [ 5432 ];
+  };
+
   services.resolved.extraConfig = ''
     Cache=true
     CacheFromLocalhost=true
