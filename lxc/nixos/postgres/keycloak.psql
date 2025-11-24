@@ -1,0 +1,29 @@
+\connect postgres
+
+-- Create the user
+CREATE ROLE keycloak LOGIN PASSWORD 'change_me_to_a_strong_password';
+
+-- Create the database
+CREATE DATABASE keycloak OWNER postgres WITH ENCODING 'UTF8';
+
+-- Allow keycloak to connect to the database
+GRANT CONNECT ON DATABASE keycloak TO keycloak;
+
+-- Switch into the new database
+\connect keycloak
+
+-- Grant access to the public schema inside this DB
+GRANT USAGE, CREATE ON SCHEMA public TO keycloak;
+
+-- Grant access to all existing tables
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO keycloak;
+
+-- Grant access to all existing sequences
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO keycloak;
+
+-- Ensure future tables are also accessible
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT ALL PRIVILEGES ON TABLES TO keycloak;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT ALL PRIVILEGES ON SEQUENCES TO keycloak;

@@ -9,6 +9,12 @@
     privileged = true;
   };
 
+  networking.firewall = {
+    enable = true;
+    allowedTCPPorts = [  ];
+    allowedUDPPorts = [  ];
+  };
+
   security.pam.services.sshd.allowNullPassword = lib.mkForce false;
   services.fstrim.enable = false;
   services.openssh = {
