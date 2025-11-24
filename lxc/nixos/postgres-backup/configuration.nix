@@ -16,8 +16,7 @@ let
   backupScript = pkgs.writeShellScript "pg-backup-script" ''
     #!${pkgs.bash}/bin/bash
 
-    set -e
-
+    set -euo pipefail
 
     LOCAL_MOUNTPOINT="$1"
     DB_HOST="$2"
@@ -41,7 +40,7 @@ let
 
     ${pkgs.postgresql_17}/bin/pg_dumpall --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" --no-password | gzip > "$DUMP_FILEPATH"
 
-    curl -s -o /dev/null "$UPTIME_URL"
+    ${pkgs.curl}/bin/curl -s -o /dev/null "$UPTIME_URL"
   '';
 in
 {
