@@ -50,6 +50,7 @@
 
       # LAN: 10.25.25.0/24
       host    all             all             10.25.25.0/24           scram-sha-256
+      host    all             all             10.27.27.0/24           scram-sha-256
 
       # Replication
       local   replication     all                                     peer
