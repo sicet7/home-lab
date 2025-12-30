@@ -1,0 +1,16 @@
+\connect postgres
+
+-- Create the user
+CREATE ROLE immich LOGIN PASSWORD 'change_me_to_a_strong_password';
+
+-- Create the database
+CREATE DATABASE immich OWNER immich ENCODING 'UTF8';
+
+-- Allow immich to connect to the database
+GRANT CONNECT ON DATABASE immich TO immich;
+
+-- Switch into the new database
+\connect immich
+
+CREATE EXTENSION vchord CASCADE;
+CREATE EXTENSION earthdistance CASCADE;

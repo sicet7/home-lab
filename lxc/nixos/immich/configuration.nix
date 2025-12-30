@@ -2,7 +2,6 @@
 let
   immich = {
     host = "0.0.0.0";
-    port = "2283";
     trustedProxies = "<trusted-proxies>";
   };
   db = {
@@ -30,8 +29,8 @@ in
 
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [  ];
-    allowedUDPPorts = [  ];
+    allowedTCPPorts = [ 2283 ];
+    allowedUDPPorts = [ 2283 ];
   };
 
   security.pam.services.sshd.allowNullPassword = lib.mkForce false;
@@ -71,7 +70,7 @@ in
           IMMICH_ENV = "production";
           IMMICH_TRUSTED_PROXIES = "${immich.trustedProxies}";
           IMMICH_HOST = "${immich.host}";
-          IMMICH_PORT = "${immich.port}";
+          IMMICH_PORT = "2283";
           IMMICH_MEDIA_LOCATION = "/data";
           
           DB_HOSTNAME = "${db.host}";
@@ -88,11 +87,29 @@ in
           
         };
         ports = [
-          "${immich.port}:${immich.port}"
+          "2283:2283"
         ];
         volumes = [
           "${nfs.localMountpoint}:/data"
           "/etc/localtime:/etc/localtime:ro"
+        ];
+        extraOptions = [
+          "--network=immich"
+        ];
+      };
+      #/docker/unifi-network-application/data
+      immich-machine-learning = {
+        autoStart = true;
+        hostname = "immich-machine-learning";
+        image = "ghcr.io/immich-app/immich-machine-learning:v2";
+        environment = {
+          IMMICH_ENV = "production";
+          NO_COLOR = "false";
+          IMMICH_PORT = "3003";
+          MACHINE_LEARNING_CACHE_FOLDER = "/cache";
+        };
+        volumes = [
+          "/docker/immich-machine-learning/cache:/cache"
         ];
         extraOptions = [
           "--network=immich"

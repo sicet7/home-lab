@@ -33,9 +33,15 @@
 
     package = pkgs.postgresql_17;
 
-    extensions = ps: [ ps.vectorchord ];
-
-    settings.password_encryption = "scram-sha-256";
+    extensions = ps: [ 
+      ps.vectorchord
+      ps.pgvector
+    ];
+    
+    settings = {
+      password_encryption = "scram-sha-256";
+      shared_preload_libraries = [ "vchord" ];
+    };
 
     authentication = lib.mkForce ''
       # Local socket connections
