@@ -47,8 +47,8 @@ in
 
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [  ];
-    allowedUDPPorts = [  ];
+    allowedTCPPorts = [ 9200 ];
+    allowedUDPPorts = [ 9200 ];
   };
 
   security.pam.services.sshd.allowNullPassword = lib.mkForce false;
@@ -102,7 +102,7 @@ in
 
     environment = {
       IDM_CREATE_DEMO_USERS = "false";
-      PROXY_ENABLE_BASIC_AUTH = "false";
+
       OC_CONFIG_DIR = "${nfs.localMountpoint}/config";
       OC_DATA_DIR = "${nfs.localMountpoint}/data";
       OC_DOMAIN = "${opencloud.domain}";
@@ -111,17 +111,25 @@ in
       PROXY_TLS = "false";
       IDM_ADMIN_PASSWORD = "${opencloud.initialAdminPassword}";
       HOME = "/var/empty";
-#      OC_EXCLUDE_RUN_SERVICES = "idp";
-#      OC_OIDC_ISSUER = "${opencloud.oidcIssuer}";
+      PROXY_AUTOPROVISION_ACCOUNTS = "true";
+      PROXY_AUTOPROVISION_CLAIM_USERNAME = ""; #TODO
+      PROXY_AUTOPROVISION_CLAIM_EMAIL = ""; #TODO
+      PROXY_AUTOPROVISION_CLAIM_DISPLAYNAME = ""; #TODO
+      OC_EXCLUDE_RUN_SERVICES = "idp";
+      OC_OIDC_ISSUER = "${opencloud.oidcIssuer}";
+      PROXY_USER_OIDC_CLAIM = "sub";
+      PROXY_USER_CS3_CLAIM = "userid";
+      PROXY_ENABLE_BASIC_AUTH = "false";
+      PROXY_INSECURE_BACKENDS = "false";
 
-      NOTIFICATIONS_SMTP_HOST = "${smtp.host}";
-      NOTIFICATIONS_SMTP_PORT = "${smtp.port}";
-      NOTIFICATIONS_SMTP_SENDER = "${smtp.sender}";
-      NOTIFICATIONS_SMTP_USERNAME = "${smtp.username}";
-      NOTIFICATIONS_SMTP_PASSWORD = "${smtp.password}";
-      NOTIFICATIONS_SMTP_INSECURE = "${smtp.insecure}";
-      NOTIFICATIONS_SMTP_AUTHENTICATION = "${smtp.authentication}";
-      NOTIFICATIONS_SMTP_ENCRYPTION = "${smtp.encryption}";
+#      NOTIFICATIONS_SMTP_HOST = "${smtp.host}";
+#      NOTIFICATIONS_SMTP_PORT = "${smtp.port}";
+#      NOTIFICATIONS_SMTP_SENDER = "${smtp.sender}";
+#      NOTIFICATIONS_SMTP_USERNAME = "${smtp.username}";
+#      NOTIFICATIONS_SMTP_PASSWORD = "${smtp.password}";
+#      NOTIFICATIONS_SMTP_INSECURE = "${smtp.insecure}";
+#      NOTIFICATIONS_SMTP_AUTHENTICATION = "${smtp.authentication}";
+#      NOTIFICATIONS_SMTP_ENCRYPTION = "${smtp.encryption}";
     };
 
     serviceConfig = {
