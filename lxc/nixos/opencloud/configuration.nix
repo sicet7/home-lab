@@ -6,10 +6,14 @@ let
     remoteMountpoint = "<nfs-remote-mountpoint>";
   };
   opencloud = {
-    domain = "<opencloud-url>";
+    domain = "<opencloud-domain>";
     oidcIssuer = "<oidc-issuer-url>";
     initialAdminPassword = "<init-admin-password>";
     idpDomain = "<idp-domain>";
+    collaboraDomain = "<collabora-domain>";
+    companionDomain = "<companion-domain>";
+    wopiserverDomain = "<wopiserver-domain>";
+    idpClientId = "<idp-client-id>";
   };
   smtp = {
     host = "<smtp-host>";
@@ -47,8 +51,8 @@ in
 
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [ 9200 ];
-    allowedUDPPorts = [ 9200 ];
+    allowedTCPPorts = [ 9200 9980 9300 ];
+    allowedUDPPorts = [ 9200 9980 9300 ];
   };
 
   security.pam.services.sshd.allowNullPassword = lib.mkForce false;
@@ -112,16 +116,21 @@ in
       IDM_ADMIN_PASSWORD = "${opencloud.initialAdminPassword}";
       HOME = "/var/empty";
       PROXY_AUTOPROVISION_ACCOUNTS = "true";
-      PROXY_AUTOPROVISION_CLAIM_USERNAME = ""; #TODO
-      PROXY_AUTOPROVISION_CLAIM_EMAIL = ""; #TODO
-      PROXY_AUTOPROVISION_CLAIM_DISPLAYNAME = ""; #TODO
+      PROXY_AUTOPROVISION_CLAIM_USERNAME = "opencloud_username";
+      PROXY_AUTOPROVISION_CLAIM_EMAIL = "email";
+      PROXY_AUTOPROVISION_CLAIM_DISPLAYNAME = "name";
       OC_EXCLUDE_RUN_SERVICES = "idp";
       OC_OIDC_ISSUER = "${opencloud.oidcIssuer}";
+      OC_OIDC_CLIENT_ID = "${opencloud.idpClientId}";
+      PROXY_OIDC_REWRITE_WELLKNOWN = "true";
+      PROXY_ROLE_ASSIGNMENT_OIDC_CLAIM = "opencloud_role";
       PROXY_USER_OIDC_CLAIM = "sub";
       PROXY_USER_CS3_CLAIM = "userid";
       PROXY_ENABLE_BASIC_AUTH = "false";
       PROXY_INSECURE_BACKENDS = "false";
-      PROXY_CSP_CONFIG_FILE_LOCATION = ""; #TODO
+      PROXY_CSP_CONFIG_FILE_LOCATION = "/etc/opencloud/csp.yaml";
+      PROXY_ROLE_ASSIGNMENT_DRIVER = "oidc";
+      GRAPH_ASSIGN_DEFAULT_USER_ROLE = "false";
 
 #      NOTIFICATIONS_SMTP_HOST = "${smtp.host}";
 #      NOTIFICATIONS_SMTP_PORT = "${smtp.port}";
@@ -150,6 +159,56 @@ in
       RestartSec = "2s";
     };
   };
+
+  environment.etc."opencloud/csp.yaml".text = ''
+    directives:
+      child-src:
+        - '''self'''
+      connect-src:
+        - '''self'''
+        - 'blob:'
+        - 'https://${opencloud.companionDomain}/'
+        - 'wss://${opencloud.companionDomain}/'
+        - 'https://raw.githubusercontent.com/opencloud-eu/awesome-apps/'
+        - 'https://${opencloud.idpDomain}/'
+        - 'https://update.opencloud.eu/'
+      default-src:
+        - '''none'''
+      font-src:
+        - '''self'''
+      frame-ancestors:
+        - '''self'''
+      frame-src:
+        - '''self'''
+        - 'blob:'
+        - 'https://embed.diagrams.net/'
+        # In contrary to bash and docker the default is given after the | character
+        - 'https://${opencloud.collaboraDomain}/'
+        # This is needed for the external-sites web extension when embedding sites
+        - 'https://docs.opencloud.eu'
+      img-src:
+        - '''self'''
+        - 'data:'
+        - 'blob:'
+        - 'https://raw.githubusercontent.com/opencloud-eu/awesome-apps/'
+        - 'https://tile.openstreetmap.org/'
+        # In contrary to bash and docker the default is given after the | character
+        - 'https://${opencloud.collaboraDomain}/'
+      manifest-src:
+        - '''self'''
+      media-src:
+        - '''self'''
+      object-src:
+        - '''self'''
+        - 'blob:'
+      script-src:
+        - '''self'''
+        - '''unsafe-inline'''
+        - 'https://${opencloud.idpDomain}/'
+      style-src:
+        - '''self'''
+        - '''unsafe-inline'''
+  '';
 
   system.stateVersion = "25.11";
 }
