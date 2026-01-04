@@ -121,6 +121,7 @@ in
       PROXY_USER_CS3_CLAIM = "userid";
       PROXY_ENABLE_BASIC_AUTH = "false";
       PROXY_INSECURE_BACKENDS = "false";
+      PROXY_CSP_CONFIG_FILE_LOCATION = ""; #TODO
 
 #      NOTIFICATIONS_SMTP_HOST = "${smtp.host}";
 #      NOTIFICATIONS_SMTP_PORT = "${smtp.port}";
