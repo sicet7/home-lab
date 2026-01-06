@@ -74,98 +74,56 @@ in
 
   boot.supportedFilesystems = [ "nfs" ];
 
-  environment.systemPackages = [
-    pkgs.opencloud
-  ];
+  virtualisation.docker.enable = true;
 
-  users.groups.opencloud = {
-    gid = 1000;
-  };
+  virtualisation.oci-containers = {
+    backend = "docker";
+    containers = {
+      opencloud = {
+        autoStart = true;
+        hostname = "opencloud";
+        image = "docker.io/opencloudeu/opencloud-rolling:4.1";
+#        dependsOn = [ "redis" ];
+        environment = {
 
-  users.users.opencloud = {
-    isNormalUser = false;
-    isSystemUser = true;
-    uid = 1000;
 
-    group = "opencloud";
-    home = "/var/empty";
-    createHome = false;
-  };
+        };
+        ports = [ ];
+        volumes = [
+          "${nfs.localMountpoint}/data:/data"
+        ];
 
-  systemd.tmpfiles.rules = [
-    "d ${nfs.localMountpoint}/config 0750 opencloud opencloud -"
-    "d ${nfs.localMountpoint}/data   0750 opencloud opencloud -"
-  ];
+        extraOptions = [
+          "--network=opencloud"
+        ];
 
-  systemd.services.opencloud = {
-    description = "OpenCloud Server";
-    wantedBy = [ "multi-user.target" ];
-
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
-
-    environment = {
-      IDM_CREATE_DEMO_USERS = "false";
-
-      OC_CONFIG_DIR = "${nfs.localMountpoint}/config";
-      OC_DATA_DIR = "${nfs.localMountpoint}/data";
-      OC_DOMAIN = "${opencloud.domain}";
-      OC_URL = "https://${opencloud.domain}";
-      OC_INSECURE = "true";
-      PROXY_TLS = "false";
-      IDM_ADMIN_PASSWORD = "${opencloud.initialAdminPassword}";
-      HOME = "/var/empty";
-      PROXY_AUTOPROVISION_ACCOUNTS = "true";
-      PROXY_AUTOPROVISION_CLAIM_USERNAME = "opencloud_username";
-      PROXY_AUTOPROVISION_CLAIM_EMAIL = "email";
-      PROXY_AUTOPROVISION_CLAIM_DISPLAYNAME = "name";
-      OC_EXCLUDE_RUN_SERVICES = "idp";
-      OC_OIDC_ISSUER = "${opencloud.oidcIssuer}";
-      OC_OIDC_CLIENT_ID = "${opencloud.idpClientId}";
-      PROXY_OIDC_REWRITE_WELLKNOWN = "true";
-      PROXY_ROLE_ASSIGNMENT_OIDC_CLAIM = "opencloud_role";
-      PROXY_USER_OIDC_CLAIM = "sub";
-      PROXY_USER_CS3_CLAIM = "userid";
-      PROXY_ENABLE_BASIC_AUTH = "false";
-      PROXY_INSECURE_BACKENDS = "false";
-      PROXY_CSP_CONFIG_FILE_LOCATION = "/etc/opencloud/csp.yaml";
-      PROXY_ROLE_ASSIGNMENT_DRIVER = "oidc";
-      GRAPH_ASSIGN_DEFAULT_USER_ROLE = "false";
-
-#      NOTIFICATIONS_SMTP_HOST = "${smtp.host}";
-#      NOTIFICATIONS_SMTP_PORT = "${smtp.port}";
-#      NOTIFICATIONS_SMTP_SENDER = "${smtp.sender}";
-#      NOTIFICATIONS_SMTP_USERNAME = "${smtp.username}";
-#      NOTIFICATIONS_SMTP_PASSWORD = "${smtp.password}";
-#      NOTIFICATIONS_SMTP_INSECURE = "${smtp.insecure}";
-#      NOTIFICATIONS_SMTP_AUTHENTICATION = "${smtp.authentication}";
-#      NOTIFICATIONS_SMTP_ENCRYPTION = "${smtp.encryption}";
-    };
-
-    serviceConfig = {
-      Type = "simple";
-
-      User  = "opencloud";
-      Group = "opencloud";
-
-      RequiresMountsFor = [ nfs.localMountpoint ];
-
-      ExecStartPre = [
-        "-${pkgs.opencloud}/bin/opencloud init"
-      ];
-
-      ExecStart = "${pkgs.opencloud}/bin/opencloud server";
-      Restart = "on-failure";
-      RestartSec = "2s";
+        entrypoint = [ "/bin/sh" ];
+        cmd = [
+          "-c"
+          "opencloud init || true; opencloud server"
+        ];
+      };
     };
   };
 
-  environment.etc."opencloud/csp.yaml".text = ''
+  systemd.services.create-docker-network = with config.virtualisation.oci-containers; {
+      serviceConfig.Type = "oneshot";
+      wants = [ "${backend}.service" ];
+      wantedBy = [ "${backend}-opencloud.service" ];
+      script = ''
+        ${pkgs.docker}/bin/docker network inspect opencloud >/dev/null 2>&1 || \
+        ${pkgs.docker}/bin/docker network create --driver bridge opencloud
+      '';
+    };
+
+  environment.etc."opencloud/csp.yaml".text = let
+      tq = builtins.concatStringsSep "" [ "'" "'" "'" ];
+    in ''
     directives:
       child-src:
-        - '''self'''
+        - ${tq}self${tq}
       connect-src:
-        - '''self'''
+        - ${tq}self${tq}
         - 'blob:'
         - 'https://${opencloud.companionDomain}/'
         - 'wss://${opencloud.companionDomain}/'
@@ -173,13 +131,13 @@ in
         - 'https://${opencloud.idpDomain}/'
         - 'https://update.opencloud.eu/'
       default-src:
-        - '''none'''
+        - ${tq}none${tq}
       font-src:
-        - '''self'''
+        - ${tq}self${tq}
       frame-ancestors:
-        - '''self'''
+        - ${tq}self${tq}
       frame-src:
-        - '''self'''
+        - ${tq}self${tq}
         - 'blob:'
         - 'https://embed.diagrams.net/'
         # In contrary to bash and docker the default is given after the | character
@@ -187,7 +145,7 @@ in
         # This is needed for the external-sites web extension when embedding sites
         - 'https://docs.opencloud.eu'
       img-src:
-        - '''self'''
+        - ${tq}self${tq}
         - 'data:'
         - 'blob:'
         - 'https://raw.githubusercontent.com/opencloud-eu/awesome-apps/'
@@ -195,19 +153,19 @@ in
         # In contrary to bash and docker the default is given after the | character
         - 'https://${opencloud.collaboraDomain}/'
       manifest-src:
-        - '''self'''
+        - ${tq}self${tq}
       media-src:
-        - '''self'''
+        - ${tq}self${tq}
       object-src:
-        - '''self'''
+        - ${tq}self${tq}
         - 'blob:'
       script-src:
-        - '''self'''
-        - '''unsafe-inline'''
+        - ${tq}self${tq}
+        - ${tq}unsafe-inline${tq}
         - 'https://${opencloud.idpDomain}/'
       style-src:
-        - '''self'''
-        - '''unsafe-inline'''
+        - ${tq}self${tq}
+        - ${tq}unsafe-inline${tq}
   '';
 
   system.stateVersion = "25.11";
