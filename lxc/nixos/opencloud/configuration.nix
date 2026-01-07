@@ -82,9 +82,14 @@ in
   virtualisation.docker.enable = true;
 
   systemd.tmpfiles.rules = [
-    "d /run/clamav 0755 1000 1000 -"
+    "d ${nfs.localMountpoint}/config 0750 1000 1000 -"
+    "d ${nfs.localMountpoint}/data   0750 1000 1000 -"
+    "d /run/clamav 0750 1000 1000 -"
     "d /var/lib/clamav 0755 1000 1000 -"
   ];
+
+  systemd.services.docker.after = [ "remote-fs.target" ];
+  systemd.services.docker.wants = [ "remote-fs.target" ];
 
   virtualisation.oci-containers = {
     backend = "docker";
@@ -96,7 +101,7 @@ in
           CLAMD_CONF_StreamMaxLength = "100M";
         };
         extraOptions = [
-          "--network=opencloud-net"
+          "--network=opencloud"
           "--restart=always"
         ];
         volumes = [
@@ -119,6 +124,7 @@ in
           OC_INSECURE = "true"; # behind TLS-terminating reverse proxy
           OC_CONFIG_DIR = "/etc/opencloud";
           OC_DATA_DIR = "/var/lib/opencloud";
+          OC_ADD_RUN_SERVICES = "notifications,antivirus";
 
           # --- Disable builtin IdP; use Keycloak ---
           OC_EXCLUDE_RUN_SERVICES = "idp";
@@ -127,7 +133,7 @@ in
 
           # --- OIDC proxy behavior ---
           PROXY_OIDC_REWRITE_WELLKNOWN = "true";
-          PROXY_INSECURE_BACKENDS = "false";
+          PROXY_INSECURE_BACKENDS = "true";
           PROXY_ENABLE_BASIC_AUTH = "false";
 
           # --- Autoprovision users from claims ---
@@ -146,7 +152,7 @@ in
           GRAPH_ASSIGN_DEFAULT_USER_ROLE = "false";
 
           # --- CSP + misc ---
-          PROXY_CSP_CONFIG_FILE_LOCATION = "/config/opencloud/csp.yaml";
+          PROXY_CSP_CONFIG_FILE_LOCATION = "/etc/opencloud/csp.yaml";
 
           # --- Notifications / SMTP ---
           NOTIFICATIONS_SMTP_HOST = smtp.host;
@@ -177,20 +183,20 @@ in
           ANTIVIRUS_SCANNER_TYPE = "clamav";
           ANTIVIRUS_WORKERS = "1";
           POSTPROCESSING_STEPS = "virusscan";
-          OC_ADD_RUN_SERVICES = "antivirus";
         };
         ports = [
            "9200:9200"
         ];
         volumes = [
           "/run/clamav:/var/run/clamav"
-          "/etc/opencloud/csp.yaml:/config/opencloud/csp.yaml"
+          "/etc/opencloud/csp.yaml:/etc/opencloud/csp.yaml:ro"
           "${nfs.localMountpoint}/data:/var/lib/opencloud"
           "${nfs.localMountpoint}/config:/etc/opencloud"
         ];
 
         extraOptions = [
           "--network=opencloud"
+          "--restart=always"
           "--user=1000:1000"
         ];
 
@@ -242,9 +248,10 @@ in
 
         extraOptions = [
           "--cap-add=MKNOD"
+          "--restart=always"
           "--network=opencloud"
 
-          "--health-cmd=curl -f http://127.0.0.1:9980/hosting/discovery || exit 1"
+          "--health-cmd=curl -f http://localhost:9980/hosting/discovery || exit 1"
           "--health-interval=15s"
           "--health-timeout=10s"
           "--health-retries=5"
@@ -282,6 +289,7 @@ in
 
         extraOptions = [
           "--user=1000:1000"
+          "--restart=always"
           "--network=opencloud"
         ];
 
