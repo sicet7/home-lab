@@ -8,12 +8,15 @@ let
   opencloud = {
     domain = "<opencloud-domain>";
     oidcIssuer = "<oidc-issuer-url>";
-    initialAdminPassword = "<init-admin-password>";
     idpDomain = "<idp-domain>";
     collaboraDomain = "<collabora-domain>";
     companionDomain = "<companion-domain>";
     wopiserverDomain = "<wopiserver-domain>";
     idpClientId = "<idp-client-id>";
+  };
+  collabora = {
+    username = "<collabora-admin-username>";
+    password = "<collabora-admin-password>";
   };
   smtp = {
     host = "<smtp-host>";
@@ -34,6 +37,8 @@ in
   fonts = {
     fontconfig.enable = true;
 
+    fontDir.enable = true;
+
     packages = with pkgs; [
       corefonts
       liberation_ttf
@@ -51,8 +56,8 @@ in
 
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [ 9200 9980 9300 ];
-    allowedUDPPorts = [ 9200 9980 9300 ];
+    allowedTCPPorts = [ 9200 ];
+    allowedUDPPorts = [ 9200 ];
   };
 
   security.pam.services.sshd.allowNullPassword = lib.mkForce false;
@@ -76,25 +81,117 @@ in
 
   virtualisation.docker.enable = true;
 
+  systemd.tmpfiles.rules = [
+    "d /run/clamav 0755 1000 1000 -"
+    "d /var/lib/clamav 0755 1000 1000 -"
+  ];
+
   virtualisation.oci-containers = {
     backend = "docker";
     containers = {
+      clamav = {
+        autoStart = true;
+        image = "docker.io/clamav/clamav:latest";
+        environment = {
+          CLAMD_CONF_StreamMaxLength = "100M";
+        };
+        extraOptions = [
+          "--network=opencloud-net"
+          "--restart=always"
+        ];
+        volumes = [
+          "/run/clamav:/tmp"
+          "/var/lib/clamav:/var/lib/clamav"
+        ];
+      };
+
+
       opencloud = {
         autoStart = true;
         hostname = "opencloud";
         image = "docker.io/opencloudeu/opencloud-rolling:4.1";
-#        dependsOn = [ "redis" ];
+
         environment = {
+          # --- Base ---
+          OC_URL = "https://${opencloud.domain}";
+          PROXY_HTTP_ADDR = "0.0.0.0:9200";
+          PROXY_TLS = "false";
+          OC_INSECURE = "true"; # behind TLS-terminating reverse proxy
+          OC_CONFIG_DIR = "/etc/opencloud";
+          OC_DATA_DIR = "/var/lib/opencloud";
 
+          # --- Disable builtin IdP; use Keycloak ---
+          OC_EXCLUDE_RUN_SERVICES = "idp";
+          OC_OIDC_ISSUER = opencloud.oidcIssuer;
+          OC_OIDC_CLIENT_ID = opencloud.idpClientId;
 
+          # --- OIDC proxy behavior ---
+          PROXY_OIDC_REWRITE_WELLKNOWN = "true";
+          PROXY_INSECURE_BACKENDS = "false";
+          PROXY_ENABLE_BASIC_AUTH = "false";
+
+          # --- Autoprovision users from claims ---
+          PROXY_AUTOPROVISION_ACCOUNTS = "true";
+          PROXY_AUTOPROVISION_CLAIM_USERNAME = "opencloud_username";
+          PROXY_AUTOPROVISION_CLAIM_EMAIL = "email";
+          PROXY_AUTOPROVISION_CLAIM_DISPLAYNAME = "name";
+
+          # --- User identity mapping ---
+          PROXY_USER_OIDC_CLAIM = "sub";
+          PROXY_USER_CS3_CLAIM = "userid";
+
+          # --- Role assignment from OIDC ---
+          PROXY_ROLE_ASSIGNMENT_DRIVER = "oidc";
+          PROXY_ROLE_ASSIGNMENT_OIDC_CLAIM = "opencloud_role";
+          GRAPH_ASSIGN_DEFAULT_USER_ROLE = "false";
+
+          # --- CSP + misc ---
+          PROXY_CSP_CONFIG_FILE_LOCATION = "/config/opencloud/csp.yaml";
+
+          # --- Notifications / SMTP ---
+          NOTIFICATIONS_SMTP_HOST = smtp.host;
+          NOTIFICATIONS_SMTP_PORT = smtp.port;
+          NOTIFICATIONS_SMTP_SENDER = smtp.sender;
+          NOTIFICATIONS_SMTP_USERNAME = smtp.username;
+          NOTIFICATIONS_SMTP_PASSWORD = smtp.password;
+          NOTIFICATIONS_SMTP_INSECURE = smtp.insecure;
+          NOTIFICATIONS_SMTP_AUTHENTICATION = smtp.authentication;
+          NOTIFICATIONS_SMTP_ENCRYPTION = smtp.encryption;
+
+          STORAGE_USERS_DATA_GATEWAY_URL = "http://opencloud:9200/data";
+
+          # --- Logging ---
+          OC_LOG_COLOR = "false";
+          OC_LOG_LEVEL = "info";
+          OC_LOG_PRETTY = "false";
+
+          # --- Collabora integration bits (from your compose) ---
+          COLLABORA_DOMAIN = opencloud.collaboraDomain;
+          FRONTEND_APP_HANDLER_SECURE_VIEW_APP_ADDR = "eu.opencloud.api.collaboration";
+
+          # --- Antivirus / postprocessing ---
+          ANTIVIRUS_CLAMAV_SOCKET = "/var/run/clamav/clamd.sock";
+          ANTIVIRUS_INFECTED_FILE_HANDLING = "abort";
+          ANTIVIRUS_MAX_SCAN_SIZE = "100MB";
+          ANTIVIRUS_MAX_SCAN_SIZE_MODE = "partial";
+          ANTIVIRUS_SCANNER_TYPE = "clamav";
+          ANTIVIRUS_WORKERS = "1";
+          POSTPROCESSING_STEPS = "virusscan";
+          OC_ADD_RUN_SERVICES = "antivirus";
         };
-        ports = [ ];
+        ports = [
+           "9200:9200"
+        ];
         volumes = [
-          "${nfs.localMountpoint}/data:/data"
+          "/run/clamav:/var/run/clamav"
+          "/etc/opencloud/csp.yaml:/config/opencloud/csp.yaml"
+          "${nfs.localMountpoint}/data:/var/lib/opencloud"
+          "${nfs.localMountpoint}/config:/etc/opencloud"
         ];
 
         extraOptions = [
           "--network=opencloud"
+          "--user=1000:1000"
         ];
 
         entrypoint = [ "/bin/sh" ];
@@ -103,18 +200,116 @@ in
           "opencloud init || true; opencloud server"
         ];
       };
+
+      collabora = {
+        autoStart = true;
+        hostname = "collabora";
+        image = "docker.io/collabora/code:25.04.7.1.1";
+
+        entrypoint = [ "/bin/bash" "-c" ];
+
+        cmd = [
+          "coolconfig generate-proof-key && /start-collabora-online.sh"
+        ];
+
+        environment = {
+          DONT_GEN_SSL_CERT = "YES";
+
+          aliasgroup1 = "https://${opencloud.wopiserverDomain}";
+
+          extra_params = ''
+            --o:ssl.enable=true \
+            --o:ssl.ssl_verification=true \
+            --o:ssl.termination=true \
+            --o:welcome.enable=false \
+            --o:net.frame_ancestors=${opencloud.domain} \
+            --o:net.lok_allow.host[14]=${opencloud.domain} \
+            --o:home_mode.enable=false
+          '';
+
+          username = collabora.username;
+          password = collabora.password;
+        };
+
+        ports = [
+          "127.0.0.1:9980:9980"
+        ];
+
+        volumes = [
+          "/run/current-system/sw/share/X11/fonts:/usr/share/fonts:ro"
+          "/run/current-system/sw/share/X11/fonts:/opt/cool/systemplate/usr/share/fonts:ro"
+        ];
+
+        extraOptions = [
+          "--cap-add=MKNOD"
+          "--network=opencloud"
+
+          "--health-cmd=curl -f http://127.0.0.1:9980/hosting/discovery || exit 1"
+          "--health-interval=15s"
+          "--health-timeout=10s"
+          "--health-retries=5"
+        ];
+      };
+
+      collaboration = {
+        autoStart = true;
+        image = "docker.io/opencloudeu/opencloud-rolling:4.1";
+
+        entrypoint = [ "/bin/sh" ];
+        cmd = [ "-c" "opencloud collaboration server" ];
+
+        # Start after the others (order only, not health)
+        dependsOn = [ "opencloud" "collabora" ];
+
+        environment = {
+          COLLABORATION_APP_ADDR = "https://${opencloud.collaboraDomain}";
+          COLLABORATION_APP_ICON = "https://${opencloud.collaboraDomain}/favicon.ico";
+          COLLABORATION_APP_INSECURE = "true";
+          COLLABORATION_APP_NAME = "CollaboraOnline";
+          COLLABORATION_APP_PRODUCT = "Collabora";
+
+          COLLABORATION_GRPC_ADDR = "0.0.0.0:9301";
+          COLLABORATION_HTTP_ADDR = "0.0.0.0:9300";
+          COLLABORATION_LOG_LEVEL = "info";
+
+          COLLABORATION_WOPI_SRC = "https://${opencloud.wopiserverDomain}";
+
+          MICRO_REGISTRY = "nats-js-kv";
+          MICRO_REGISTRY_ADDRESS = "opencloud:9233";
+
+          OC_URL = "https://${opencloud.domain}";
+        };
+
+        extraOptions = [
+          "--user=1000:1000"
+          "--network=opencloud"
+        ];
+
+        volumes = [
+          "${nfs.localMountpoint}/config:/etc/opencloud"
+        ];
+
+        # Optional: only if you want local debug access
+        # ports = [ "127.0.0.1:9300:9300" ];
+      };
     };
   };
 
-  systemd.services.create-docker-network = with config.virtualisation.oci-containers; {
-      serviceConfig.Type = "oneshot";
-      wants = [ "${backend}.service" ];
-      wantedBy = [ "${backend}-opencloud.service" ];
-      script = ''
-        ${pkgs.docker}/bin/docker network inspect opencloud >/dev/null 2>&1 || \
+  systemd.services.create-opencloud-net = with config.virtualisation.oci-containers; {
+    serviceConfig.Type = "oneshot";
+    wants = [ "${backend}.service" ];
+    after = [ "${backend}.service" ];
+    wantedBy = [
+      "${backend}-opencloud.service"
+      "${backend}-collabora.service"
+      "${backend}-collaboration.service"
+      "${backend}-clamav.service"
+    ];
+    script = ''
+      ${pkgs.docker}/bin/docker network inspect opencloud >/dev/null 2>&1 || \
         ${pkgs.docker}/bin/docker network create --driver bridge opencloud
-      '';
-    };
+    '';
+  };
 
   environment.etc."opencloud/csp.yaml".text = let
       tq = builtins.concatStringsSep "" [ "'" "'" "'" ];
