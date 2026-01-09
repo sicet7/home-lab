@@ -1,13 +1,14 @@
 { config, modulesPath, pkgs, lib, ... }:
 let
   postfix = {
-    username = "<postfix-username>";
-    password = "<postfix-password>";
-    gmailAddress = "your.email@gmail.com";
+    username = "<local-smtp-username>";
+    password = "<local-smtp-password>";
+    gmailAddress = "<gmail-login-address>";
     gmailAppPassword = "<gmail-app-password>";
-    interface = "<listening-interface>";
-    hostname = "mail.local"; # not important for relaying
-    domain = "local"; # not important for relaying
+    listenInterface = "<ipv4-to-listen-for-local-smtp-clients-on>";
+    externalInterface = "<ipv4-to-connect-to-gmail-via>";
+    hostname = "mail.local";
+    domain = "local";
   };
 in
 {
@@ -23,7 +24,7 @@ in
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [ 25 ];
-    allowedUDPPorts = [ 25 ];
+    allowedUDPPorts = [ ];
   };
 
   security.pam.services.sshd.allowNullPassword = lib.mkForce false;
@@ -41,24 +42,45 @@ in
   services.postfix = {
     enable = true;
 
-    relayHost = "[smtp.gmail.com]:587";
-    inetInterfaces = postfix.interface;
-    destination = [];
+    # (Optional) keep this true; it provides the port 25 listener in master.cf
+    enableSmtp = true;
 
-    hostname = postfix.hostname;
-    domain   = postfix.domain;
+    mapFiles.sasl_passwd = pkgs.writeText "sasl_passwd" ''
+      [smtp.gmail.com]:587 ${postfix.gmailAddress}:${postfix.gmailAppPassword}
+    '';
 
-    config = {
-      # --- Require SMTP AUTH from clients ---
+    settings.main = {
+      # Listen only on a specific interface/IP (or use "loopback-only")
+      inet_interfaces = postfix.listenInterface;
+      smtp_bind_address = postfix.externalInterface;
+
+      inet_protocols = "ipv4";
+
+      # Gmail relayhost is a LIST in 25.11
+      relayhost = [ "[smtp.gmail.com]:587" ];
+
+      # Cosmetic identity
+      myhostname = postfix.hostname;
+      mydomain   = postfix.domain;
+
+      # No local delivery (relay-only)
+      mydestination = "";
+
+      # --- Require SMTP AUTH from clients (Cyrus SASL) ---
       smtpd_sasl_auth_enable = "yes";
       smtpd_sasl_type = "cyrus";
       smtpd_sasl_path = "smtpd";
       smtpd_sasl_security_options = "noanonymous";
       broken_sasl_auth_clients = "yes";
 
+      # Realm match (since you create users with -u ${postfix.domain})
+      smtpd_sasl_local_domain = postfix.domain;
+
+      # Only authenticated clients may send
+      smtpd_client_restrictions = "permit_sasl_authenticated,reject";
       smtpd_recipient_restrictions = "permit_sasl_authenticated,reject";
 
-      # --- Gmail relay auth ---
+      # --- Gmail relay auth (outbound) ---
       smtp_sasl_auth_enable = "yes";
       smtp_sasl_security_options = "noanonymous";
       smtp_sasl_password_maps = "hash:/etc/postfix/sasl_passwd";
@@ -69,32 +91,30 @@ in
       smtp_tls_CAfile = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
       smtp_tls_note_starttls_offer = "yes";
 
-      # No local delivery
-      mydestination = "";
-
       smtp_tls_loglevel = "1";
     };
   };
 
-  environment.etc."postfix/sasl_passwd" = {
+  environment.etc."sasl2/smtpd.conf" = {
     text = ''
-      [smtp.gmail.com]:587 ${postfix.gmailAddress}:${postfix.gmailAppPassword}
+      pwcheck_method: auxprop
+      auxprop_plugin: sasldb
+      mech_list: PLAIN LOGIN
     '';
-    mode = "0600";
+    mode = "0644";
   };
 
-  services.cyrus-sasl.enable = true;
+  environment.systemPackages = [ pkgs.cyrus_sasl ];
 
-  # Create the SASL user automatically
   system.activationScripts.createSaslUser = ''
+    set -euo pipefail
+
     echo "${postfix.password}" | \
       ${pkgs.cyrus_sasl}/bin/saslpasswd2 \
         -p -c -u ${postfix.domain} ${postfix.username}
-  '';
 
-  # Build postfix maps
-  system.activationScripts.postfixMaps = ''
-    ${pkgs.postfix}/bin/postmap /etc/postfix/sasl_passwd
+    chown root:postfix /etc/sasldb2 || true
+    chmod 0640 /etc/sasldb2 || true
   '';
 
   system.stateVersion = "25.11";
