@@ -107,6 +107,8 @@ in
           PROXY_OIDC_REWRITE_WELLKNOWN = "true";
           PROXY_INSECURE_BACKENDS = "true";
           PROXY_ENABLE_BASIC_AUTH = "false";
+          PROXY_OIDC_ACCESS_TOKEN_VERIFY_METHOD = "jwt";
+          PROXY_OIDC_SKIP_USER_INFO = "true";
 
           # --- Autoprovision users from claims ---
           PROXY_AUTOPROVISION_ACCOUNTS = "true";
