@@ -9,24 +9,14 @@ let
     domain = "<opencloud-domain>";
     oidcIssuer = "<oidc-issuer-url>";
     idpDomain = "<idp-domain>";
+    idpClientId = "<idp-client-id>";
     collaboraDomain = "<collabora-domain>";
     companionDomain = "<companion-domain>";
     wopiserverDomain = "<wopiserver-domain>";
-    idpClientId = "<idp-client-id>";
   };
   collabora = {
     username = "<collabora-admin-username>";
     password = "<collabora-admin-password>";
-  };
-  smtp = {
-    host = "<smtp-host>";
-    port = "<smtp-port>";
-    sender = "<smtp-sender>";
-    username = "<smtp-username>";
-    password = "<smtp-password>";
-    insecure = "false";
-    authentication = "<smtp-authentication>"; # Possible values are 'login', 'plain', 'crammd5', 'none' or 'auto'. If set to 'auto' or unset, the authentication method is automatically negotiated with the server.
-    encryption = "<smtp-encryption>"; # Possible values are 'starttls', 'ssltls' and 'none'.
   };
 in
 { 
@@ -43,7 +33,8 @@ in
       corefonts
       liberation_ttf
       noto-fonts
-      noto-fonts-cjk
+      noto-fonts-cjk-sans
+      noto-fonts-cjk-serif
     ];
   };
 
@@ -56,8 +47,8 @@ in
 
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [ 9200 ];
-    allowedUDPPorts = [ 9200 ];
+    allowedTCPPorts = [ 9200 9980 ];
+    allowedUDPPorts = [ 9200 9980 ];
   };
 
   security.pam.services.sshd.allowNullPassword = lib.mkForce false;
@@ -84,8 +75,6 @@ in
   systemd.tmpfiles.rules = [
     "d ${nfs.localMountpoint}/config 0750 1000 1000 -"
     "d ${nfs.localMountpoint}/data   0750 1000 1000 -"
-    "d /run/clamav 0750 1000 1000 -"
-    "d /var/lib/clamav 0755 1000 1000 -"
   ];
 
   systemd.services.docker.after = [ "remote-fs.target" ];
@@ -94,23 +83,6 @@ in
   virtualisation.oci-containers = {
     backend = "docker";
     containers = {
-      clamav = {
-        autoStart = true;
-        image = "docker.io/clamav/clamav:latest";
-        environment = {
-          CLAMD_CONF_StreamMaxLength = "100M";
-        };
-        extraOptions = [
-          "--network=opencloud"
-          "--restart=always"
-        ];
-        volumes = [
-          "/run/clamav:/tmp"
-          "/var/lib/clamav:/var/lib/clamav"
-        ];
-      };
-
-
       opencloud = {
         autoStart = true;
         hostname = "opencloud";
@@ -124,7 +96,6 @@ in
           OC_INSECURE = "true"; # behind TLS-terminating reverse proxy
           OC_CONFIG_DIR = "/etc/opencloud";
           OC_DATA_DIR = "/var/lib/opencloud";
-          OC_ADD_RUN_SERVICES = "notifications,antivirus";
 
           # --- Disable builtin IdP; use Keycloak ---
           OC_EXCLUDE_RUN_SERVICES = "idp";
@@ -142,6 +113,9 @@ in
           PROXY_AUTOPROVISION_CLAIM_EMAIL = "email";
           PROXY_AUTOPROVISION_CLAIM_DISPLAYNAME = "name";
 
+          NATS_NATS_HOST = "0.0.0.0";
+          GATEWAY_GRPC_ADDR = "0.0.0.0:9142";
+
           # --- User identity mapping ---
           PROXY_USER_OIDC_CLAIM = "sub";
           PROXY_USER_CS3_CLAIM = "userid";
@@ -154,16 +128,6 @@ in
           # --- CSP + misc ---
           PROXY_CSP_CONFIG_FILE_LOCATION = "/etc/opencloud/csp.yaml";
 
-          # --- Notifications / SMTP ---
-          NOTIFICATIONS_SMTP_HOST = smtp.host;
-          NOTIFICATIONS_SMTP_PORT = smtp.port;
-          NOTIFICATIONS_SMTP_SENDER = smtp.sender;
-          NOTIFICATIONS_SMTP_USERNAME = smtp.username;
-          NOTIFICATIONS_SMTP_PASSWORD = smtp.password;
-          NOTIFICATIONS_SMTP_INSECURE = smtp.insecure;
-          NOTIFICATIONS_SMTP_AUTHENTICATION = smtp.authentication;
-          NOTIFICATIONS_SMTP_ENCRYPTION = smtp.encryption;
-
           STORAGE_USERS_DATA_GATEWAY_URL = "http://opencloud:9200/data";
 
           # --- Logging ---
@@ -174,21 +138,11 @@ in
           # --- Collabora integration bits (from your compose) ---
           COLLABORA_DOMAIN = opencloud.collaboraDomain;
           FRONTEND_APP_HANDLER_SECURE_VIEW_APP_ADDR = "eu.opencloud.api.collaboration";
-
-          # --- Antivirus / postprocessing ---
-          ANTIVIRUS_CLAMAV_SOCKET = "/var/run/clamav/clamd.sock";
-          ANTIVIRUS_INFECTED_FILE_HANDLING = "abort";
-          ANTIVIRUS_MAX_SCAN_SIZE = "100MB";
-          ANTIVIRUS_MAX_SCAN_SIZE_MODE = "partial";
-          ANTIVIRUS_SCANNER_TYPE = "clamav";
-          ANTIVIRUS_WORKERS = "1";
-          POSTPROCESSING_STEPS = "virusscan";
         };
         ports = [
            "9200:9200"
         ];
         volumes = [
-          "/run/clamav:/var/run/clamav"
           "/etc/opencloud/csp.yaml:/etc/opencloud/csp.yaml:ro"
           "${nfs.localMountpoint}/data:/var/lib/opencloud"
           "${nfs.localMountpoint}/config:/etc/opencloud"
@@ -196,11 +150,10 @@ in
 
         extraOptions = [
           "--network=opencloud"
-          "--restart=always"
           "--user=1000:1000"
         ];
 
-        entrypoint = [ "/bin/sh" ];
+        entrypoint = "/bin/sh";
         cmd = [
           "-c"
           "opencloud init || true; opencloud server"
@@ -212,9 +165,10 @@ in
         hostname = "collabora";
         image = "docker.io/collabora/code:25.04.7.1.1";
 
-        entrypoint = [ "/bin/bash" "-c" ];
+        entrypoint = "/bin/bash";
 
         cmd = [
+          "-c"
           "coolconfig generate-proof-key && /start-collabora-online.sh"
         ];
 
@@ -224,8 +178,8 @@ in
           aliasgroup1 = "https://${opencloud.wopiserverDomain}";
 
           extra_params = ''
-            --o:ssl.enable=true \
-            --o:ssl.ssl_verification=true \
+            --o:ssl.enable=false \
+            --o:ssl.ssl_verification=false \
             --o:ssl.termination=true \
             --o:welcome.enable=false \
             --o:net.frame_ancestors=${opencloud.domain} \
@@ -238,7 +192,7 @@ in
         };
 
         ports = [
-          "127.0.0.1:9980:9980"
+          "9980:9980"
         ];
 
         volumes = [
@@ -248,8 +202,9 @@ in
 
         extraOptions = [
           "--cap-add=MKNOD"
-          "--restart=always"
           "--network=opencloud"
+          "--cap-add=SYS_ADMIN"
+          "--security-opt=apparmor=unconfined"
 
           "--health-cmd=curl -f http://localhost:9980/hosting/discovery || exit 1"
           "--health-interval=15s"
@@ -262,7 +217,7 @@ in
         autoStart = true;
         image = "docker.io/opencloudeu/opencloud-rolling:4.1";
 
-        entrypoint = [ "/bin/sh" ];
+        entrypoint = "/bin/sh";
         cmd = [ "-c" "opencloud collaboration server" ];
 
         # Start after the others (order only, not health)
@@ -289,7 +244,6 @@ in
 
         extraOptions = [
           "--user=1000:1000"
-          "--restart=always"
           "--network=opencloud"
         ];
 
@@ -311,7 +265,6 @@ in
       "${backend}-opencloud.service"
       "${backend}-collabora.service"
       "${backend}-collaboration.service"
-      "${backend}-clamav.service"
     ];
     script = ''
       ${pkgs.docker}/bin/docker network inspect opencloud >/dev/null 2>&1 || \
