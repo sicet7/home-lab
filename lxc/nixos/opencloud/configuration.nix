@@ -97,6 +97,7 @@ in
           OC_INSECURE = "true"; # behind TLS-terminating reverse proxy
           OC_CONFIG_DIR = "/etc/opencloud";
           OC_DATA_DIR = "/var/lib/opencloud";
+          WEB_UI_CONFIG_FILE = "/etc/opencloud/web-ui-config.json";
 
           # --- Disable builtin IdP; use Keycloak ---
           OC_EXCLUDE_RUN_SERVICES = "idp";
@@ -150,6 +151,7 @@ in
         volumes = [
           "/etc/opencloud/csp.yaml:/etc/opencloud/csp.yaml:ro"
           "/etc/opencloud/proxy.yaml:/etc/opencloud/proxy.yaml:ro"
+          "/etc/opencloud/web-ui-config.json:/etc/opencloud/web-ui-config.json:ro"
           "/var/lib/opencloud/nats:/var/lib/nats"
           "${nfs.localMountpoint}/data:/var/lib/opencloud"
           "${nfs.localMountpoint}/config:/etc/opencloud"
@@ -278,6 +280,21 @@ in
         ${pkgs.docker}/bin/docker network create --driver bridge opencloud
     '';
   };
+
+  environment.etc."opencloud/web-ui-config.json".text = ''
+    {
+      "apps": [
+        "files",
+        "text-editor",
+        "pdf-viewer",
+        "search",
+        "external",
+        "admin-settings",
+        "epub-reader",
+        "preview"
+      ]
+    }
+  '';
 
   environment.etc."opencloud/proxy.yaml".text = ''
     role_assignment:
