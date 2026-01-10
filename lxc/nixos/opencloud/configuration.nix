@@ -98,6 +98,7 @@ in
           OC_CONFIG_DIR = "/etc/opencloud";
           OC_DATA_DIR = "/var/lib/opencloud";
           WEB_UI_CONFIG_FILE = "/etc/opencloud/web-ui-config.json";
+          FRONTEND_DISABLE_RADICALE = "true";
 
           # --- Disable builtin IdP; use Keycloak ---
           OC_EXCLUDE_RUN_SERVICES = "idp";
