@@ -75,6 +75,7 @@ in
   systemd.tmpfiles.rules = [
     "d ${nfs.localMountpoint}/config 0750 1000 1000 -"
     "d ${nfs.localMountpoint}/data   0750 1000 1000 -"
+    "d /var/lib/opencloud/nats       0750 1000 1000 -"
   ];
 
   systemd.services.docker.after = [ "remote-fs.target" ];
@@ -114,6 +115,7 @@ in
           PROXY_AUTOPROVISION_CLAIM_DISPLAYNAME = "name";
 
           NATS_NATS_HOST = "0.0.0.0";
+          NATS_NATS_STORE_DIR = "/var/lib/nats";
           GATEWAY_GRPC_ADDR = "0.0.0.0:9142";
 
           # --- User identity mapping ---
@@ -132,7 +134,7 @@ in
 
           # --- Logging ---
           OC_LOG_COLOR = "false";
-          OC_LOG_LEVEL = "info";
+          OC_LOG_LEVEL = "warn";
           OC_LOG_PRETTY = "false";
 
           # --- Collabora integration bits (from your compose) ---
@@ -144,6 +146,7 @@ in
         ];
         volumes = [
           "/etc/opencloud/csp.yaml:/etc/opencloud/csp.yaml:ro"
+          "/var/lib/opencloud/nats:/var/lib/nats"
           "${nfs.localMountpoint}/data:/var/lib/opencloud"
           "${nfs.localMountpoint}/config:/etc/opencloud"
         ];
