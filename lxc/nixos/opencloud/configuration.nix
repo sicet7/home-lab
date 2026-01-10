@@ -149,6 +149,7 @@ in
         ];
         volumes = [
           "/etc/opencloud/csp.yaml:/etc/opencloud/csp.yaml:ro"
+          "/etc/opencloud/proxy.yaml:/etc/opencloud/proxy.yaml:ro"
           "/var/lib/opencloud/nats:/var/lib/nats"
           "${nfs.localMountpoint}/data:/var/lib/opencloud"
           "${nfs.localMountpoint}/config:/etc/opencloud"
@@ -277,6 +278,22 @@ in
         ${pkgs.docker}/bin/docker network create --driver bridge opencloud
     '';
   };
+
+  environment.etc."opencloud/proxy.yaml".text = ''
+    role_assignment:
+      driver: oidc
+      oidc_role_mapper:
+        role_claim: opencloud_role
+        role_mapping:
+          - role_name: admin
+            claim_value: opencloudAdmin
+          - role_name: spaceadmin
+            claim_value: opencloudSpaceAdmin
+          - role_name: user
+            claim_value: opencloudUser
+          - role_name: guest
+            claim_value: opencloudGuest
+  '';
 
   environment.etc."opencloud/csp.yaml".text = let
       tq = builtins.concatStringsSep "" [ "'" "'" "'" ];
