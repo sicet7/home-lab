@@ -113,7 +113,7 @@ in
           # --- Autoprovision users from claims ---
           PROXY_AUTOPROVISION_ACCOUNTS = "true";
           GRAPH_USERNAME_MATCH = "none";
-          PROXY_AUTOPROVISION_CLAIM_USERNAME = "opencloud_username";
+          PROXY_AUTOPROVISION_CLAIM_USERNAME = "sub";
           PROXY_AUTOPROVISION_CLAIM_EMAIL = "email";
           PROXY_AUTOPROVISION_CLAIM_DISPLAYNAME = "name";
 
@@ -123,7 +123,7 @@ in
 
           # --- User identity mapping ---
           PROXY_USER_OIDC_CLAIM = "sub";
-          PROXY_USER_CS3_CLAIM = "userid";
+          PROXY_USER_CS3_CLAIM = "username";
 
           # --- Role assignment from OIDC ---
           PROXY_ROLE_ASSIGNMENT_DRIVER = "oidc";
