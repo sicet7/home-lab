@@ -110,6 +110,7 @@ in
 
           # --- Autoprovision users from claims ---
           PROXY_AUTOPROVISION_ACCOUNTS = "true";
+          GRAPH_USERNAME_MATCH = "none";
           PROXY_AUTOPROVISION_CLAIM_USERNAME = "opencloud_username";
           PROXY_AUTOPROVISION_CLAIM_EMAIL = "email";
           PROXY_AUTOPROVISION_CLAIM_DISPLAYNAME = "name";
