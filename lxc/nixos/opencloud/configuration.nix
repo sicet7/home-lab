@@ -18,6 +18,65 @@ let
     username = "<collabora-admin-username>";
     password = "<collabora-admin-password>";
   };
+
+  ########################################################
+  ################## Web App Extensions ##################
+  ########################################################
+  mkWebApp = { name, dist, configJson ? null }:
+    pkgs.runCommand "opencloud-webapp-${name}" { } ''
+      set -euo pipefail
+      mkdir -p $out
+      cp -a ${dist}/* $out/
+      ${lib.optionalString (configJson != null) ''
+        cat > $out/config.json <<'EOF'
+        ${configJson}
+        EOF
+      ''}
+    '';
+  extensions = {
+    draw-io = mkWebApp {
+      name = "draw-io";
+      dist = pkgs.fetchzip {
+        url  = "https://github.com/opencloud-eu/web-extensions/releases/download/draw-io-v1.0.1/draw-io-1.0.1.zip";
+        hash = "sha256-NGkp+tPAtBVY5vhhiTRl7cj4H498hG92kE7N/5qw4Vw=";
+        stripRoot = true;
+      };
+    };
+    unzip = mkWebApp {
+      name = "unzip";
+      dist = pkgs.fetchzip {
+        url  = "https://github.com/opencloud-eu/web-extensions/releases/download/unzip-v1.0.4/unzip-1.0.4.zip";
+        hash = "sha256-sBGgJ3Utm0XzV8qdAH0L7UZFVEKwFuEXImpn2RU3c4o=";
+        stripRoot = true;
+      };
+    };
+    json-viewer = mkWebApp {
+      name = "json-viewer";
+      dist = pkgs.fetchzip {
+        url  = "https://github.com/opencloud-eu/web-extensions/releases/download/json-viewer-v1.0.2/json-viewer-1.0.2.zip";
+        hash = "sha256-quKCroE6bJS+hGjeHWumkn0N1MA5WivYUgfI+Pn/cgs=";
+        stripRoot = true;
+      };
+    };
+    external-sites = mkWebApp {
+      name = "external-sites";
+      dist = pkgs.fetchzip {
+        url  = "https://github.com/opencloud-eu/web-extensions/releases/download/external-sites-v1.3.0/external-sites-1.3.0.zip";
+        hash = "sha256-++ZuTpLkTiAYSbIRzajmzSopfmBqpzY1iG1yCJmxhXA=";
+        stripRoot = true;
+      };
+      configJson = ''
+        {
+          "config": {
+            "sites": [ ]
+          }
+        }
+      '';
+    };
+  };
+  extensionVolumes = lib.mapAttrsToList (name: path:
+    "${path}:/var/lib/oc/apps/${name}:ro"
+  ) extensions;
 in
 { 
   imports = [ (modulesPath + "/virtualisation/proxmox-lxc.nix") ];
@@ -99,6 +158,7 @@ in
           OC_DATA_DIR = "/var/lib/opencloud";
           WEB_UI_CONFIG_FILE = "/etc/opencloud/web-ui-config.json";
           FRONTEND_DISABLE_RADICALE = "true";
+          WEB_ASSET_APPS_PATH = "/var/lib/oc/apps";
 
           # --- Disable builtin IdP; use Keycloak ---
           OC_EXCLUDE_RUN_SERVICES = "idp";
@@ -149,14 +209,14 @@ in
         ports = [
            "9200:9200"
         ];
-        volumes = [
+        volumes = ([
           "/etc/opencloud/csp.yaml:/etc/opencloud/csp.yaml:ro"
           "/etc/opencloud/proxy.yaml:/etc/opencloud/proxy.yaml:ro"
           "/etc/opencloud/web-ui-config.json:/etc/opencloud/web-ui-config.json:ro"
           "/var/lib/opencloud/nats:/var/lib/nats"
           "${nfs.localMountpoint}/data:/var/lib/opencloud"
           "${nfs.localMountpoint}/config:/etc/opencloud"
-        ];
+        ]) ++ extensionVolumes;
 
         extraOptions = [
           "--network=opencloud"
