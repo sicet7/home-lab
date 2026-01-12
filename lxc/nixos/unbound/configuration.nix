@@ -84,6 +84,11 @@ in
         so-sndbuf = "0";
         so-rcvbuf = "0";
 
+        # disable logging.
+        verbosity = 1;
+        log-queries = "no";
+        log-replies = "no";
+
         access-control = [
           "127.0.0.0/8 allow"
           "::1 allow"
