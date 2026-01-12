@@ -50,17 +50,40 @@ in
 
   environment.etc."ssl/certs/ca-certificates.crt".source = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
 
-  services.resolved.enable = lib.mkDefault false;
+  services.resolved.enable = lib.mkForce false;
 
   services.unbound = {
     enable = true;
+    enableRootTrustAnchor = false;
+    settings = let
+      isV6 = s: lib.hasInfix ":" s;
 
-    settings = {
+      overrideZones =
+        map (d: ''"${d}." transparent'')
+          (builtins.attrNames overrides);
+
+      overrideData =
+        lib.concatLists (lib.mapAttrsToList
+          (domain: value:
+            let
+              ips = if builtins.isList value then value else [ value ];
+            in
+              map (ip:
+                if isV6 ip
+                then ''"${domain}. IN AAAA ${ip}"''
+                else ''"${domain}. IN A ${ip}"''
+              ) ips
+          )
+          overrides);
+    in {
       server = {
         interface = [ "0.0.0.0" "::0" ];
         port = 53;
 
-        # Allow common private ranges + localhost (tighten if you want)
+        # snd and rcv buffers is defined by the LXC host
+        so-sndbuf = "0";
+        so-rcvbuf = "0";
+
         access-control = [
           "127.0.0.0/8 allow"
           "::1 allow"
@@ -83,9 +106,12 @@ in
         harden-dnssec-stripped = "yes";
         deny-any = "yes";
 
-        # DNSSEC validation
-        trust-anchor-file = "${pkgs.unbound}/etc/unbound/root.key";
+        trust-anchor-file = "${pkgs.dns-root-data}/root.key";
         val-permissive-mode = "no";
+
+        # --- Local overrides (generated) ---
+        local-zone = overrideZones;
+        local-data = overrideData;
       };
 
       forward-zone = [
@@ -97,30 +123,6 @@ in
         }
       ];
     };
-
-    extraConfig =
-      let
-        mkA = domain: ip: ''local-data: "${domain}. IN A ${ip}"'';
-        mkAAAA = domain: ip: ''local-data: "${domain}. IN AAAA ${ip}"'';
-        isV6 = s: lib.hasInfix ":" s;
-
-        domainToLines = domain: value:
-          let
-            ips = if builtins.isList value then value else [ value ];
-            zoneLine = ''local-zone: "${domain}." transparent'';
-            dataLines =
-              map (ip: if isV6 ip then mkAAAA domain ip else mkA domain ip) ips;
-          in
-            [ zoneLine ] ++ dataLines;
-
-        overrideLines =
-          lib.concatStringsSep "\n"
-            (lib.concatLists (lib.mapAttrsToList domainToLines overrides));
-      in
-      ''
-        # --- Local overrides (generated) ---
-        ${overrideLines}
-      '';
   };
 
   system.stateVersion = "25.11";
