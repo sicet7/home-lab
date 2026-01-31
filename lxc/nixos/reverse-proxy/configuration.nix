@@ -82,40 +82,40 @@ in
 
   services.nginx = let
     websocketProxyBits = ''
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection $connection_upgrade;
+      proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
 
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
 
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
-      '';
+      proxy_read_timeout 3600s;
+      proxy_send_timeout 3600s;
+    '';
 
-      mkLocations = v:
-        let
-          extraLocs =
-            lib.mapAttrs
-              (_path: loc: {
-                proxyPass = v.upstream;
-                extraConfig = ''
-                  ${websocketProxyBits}
-                  ${loc.extraConfig or ""}
-                '';
-              })
-              (v.locations or {});
-        in
-        ({
-          "/" = {
-            proxyPass = v.upstream;
-            extraConfig = ''
-              ${websocketProxyBits}
-            '';
-          };
-        } // extraLocs);
+    mkLocations = v:
+      let
+        extraLocs =
+          lib.mapAttrs
+            (_path: loc: {
+              proxyPass = v.upstream;
+              extraConfig = ''
+                ${websocketProxyBits}
+                ${loc.extraConfig or ""}
+              '';
+            })
+            (v.locations or {});
+      in
+      ({
+        "/" = {
+          proxyPass = v.upstream;
+          extraConfig = ''
+            ${websocketProxyBits}
+          '';
+        };
+      } // extraLocs);
   in {
     enable = true;
 
