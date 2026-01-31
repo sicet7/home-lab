@@ -1,22 +1,9 @@
 { config, modulesPath, pkgs, lib, ... }:
 let
-  # =========================
-  #  USER-EDITABLE SETTINGS
-  # =========================
-
   # true  => Let's Encrypt staging
   # false => Let's Encrypt production
   acmeUseStaging = true;
-
   acmeEmail = "you@example.com";
-
-  # Cloudflare API token with permissions:
-  # - Zone:Read
-  # - DNS:Edit
-  # scoped to the relevant zone(s)
-  #
-  # SECURITY NOTE: putting this here makes it non-secret on the machine
-  # (it will be embedded into the Nix store / generated units).
   cloudflareDnsApiToken = "PASTE_TOKEN_HERE";
 
   domains = {
@@ -38,51 +25,6 @@ let
       };
     };
   };
-
-  # =========================
-  #  IMPLEMENTATION DETAILS
-  # =========================
-
-  acmeServer =
-    if acmeUseStaging
-    then "https://acme-staging-v02.api.letsencrypt.org/directory"
-    else "https://acme-v02.api.letsencrypt.org/directory";
-
-  websocketProxyBits = ''
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection $connection_upgrade;
-
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-
-    proxy_read_timeout 3600s;
-    proxy_send_timeout 3600s;
-  '';
-
-  mkLocations = v:
-    let
-      extraLocs =
-        lib.mapAttrs
-          (_path: loc: {
-            proxyPass = v.upstream;
-            extraConfig = ''
-              ${websocketProxyBits}
-              ${loc.extraConfig or ""}
-            '';
-          })
-          (v.locations or {});
-    in
-    ({
-      "/" = {
-        proxyPass = v.upstream;
-        extraConfig = ''
-          ${websocketProxyBits}
-        '';
-      };
-    } // extraLocs);
 in
 {
   imports = [ (modulesPath + "/virtualisation/proxmox-lxc.nix") ];
@@ -115,7 +57,12 @@ in
     "f /run/secrets/cf_dns_api_token 0400 root root - ${cloudflareDnsApiToken}"
   ];
 
-  security.acme = {
+  security.acme = let
+    acmeServer =
+        if acmeUseStaging
+        then "https://acme-staging-v02.api.letsencrypt.org/directory"
+        else "https://acme-v02.api.letsencrypt.org/directory";
+  in {
     acceptTerms = true;
 
     defaults = {
@@ -133,7 +80,43 @@ in
     certs = lib.mapAttrs (_host: _v: { }) domains;
   };
 
-  services.nginx = {
+  services.nginx = let
+    websocketProxyBits = ''
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+      '';
+
+      mkLocations = v:
+        let
+          extraLocs =
+            lib.mapAttrs
+              (_path: loc: {
+                proxyPass = v.upstream;
+                extraConfig = ''
+                  ${websocketProxyBits}
+                  ${loc.extraConfig or ""}
+                '';
+              })
+              (v.locations or {});
+        in
+        ({
+          "/" = {
+            proxyPass = v.upstream;
+            extraConfig = ''
+              ${websocketProxyBits}
+            '';
+          };
+        } // extraLocs);
+  in {
     enable = true;
 
     recommendedGzipSettings = true;
