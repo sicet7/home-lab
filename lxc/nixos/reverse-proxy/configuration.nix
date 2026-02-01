@@ -165,18 +165,17 @@ in
     mkListen = v:
       let
         ips = v.bindIps or null;
-        enableHttp2 = v.http2 or false;
 
         mk = ip: [
           { addr = ip; port = 80; }
-          { addr = ip; port = 443; ssl = true; http2 = enableHttp2; }
+          { addr = ip; port = 443; ssl = true; }
         ];
       in
       if ips == null then [
         { addr = "0.0.0.0"; port = 80; }
-        { addr = "0.0.0.0"; port = 443; ssl = true; http2 = enableHttp2; }
+        { addr = "0.0.0.0"; port = 443; ssl = true; }
         { addr = "[::]"; port = 80; }
-        { addr = "[::]"; port = 443; ssl = true; http2 = enableHttp2; }
+        { addr = "[::]"; port = 443; ssl = true; }
       ] else lib.flatten (map mk ips);
   in
   {
@@ -199,6 +198,8 @@ in
 
       enableACME = true;
       forceSSL = true;
+
+      http2 = v.http2 or false;
 
       # DNS-01: don't set up HTTP-01 webroot
       acmeRoot = null;
