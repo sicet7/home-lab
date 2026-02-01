@@ -183,10 +183,16 @@ in
 
     recommendedGzipSettings = true;
     recommendedOptimisation = true;
-    recommendedProxySettings = true;
+    recommendedProxySettings = false;
     recommendedTlsSettings = true;
 
     appendHttpConfig = ''
+      proxy_headers_hash_max_size 1024;
+      proxy_headers_hash_bucket_size 128;
+
+      client_header_buffer_size 16k;
+      large_client_header_buffers 4 32k;
+
       map $http_upgrade $connection_upgrade {
         default upgrade;
         "" close;
@@ -194,8 +200,6 @@ in
     '';
 
     virtualHosts = lib.mapAttrs (host: v: {
-      serverName = host;
-
       enableACME = true;
       forceSSL = true;
 
