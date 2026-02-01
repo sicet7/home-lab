@@ -158,7 +158,28 @@ in
           '';
         };
       } // extraLocs);
-  in {
+
+    # Per-vhost listen list:
+    # - if bindIps is omitted: listen on all IPv4+IPv6
+    # - if bindIps is set: bind only to those IPs
+    mkListen = v:
+      let
+        ips = v.bindIps or null;
+        enableHttp2 = v.http2 or false;
+
+        mk = ip: [
+          { addr = ip; port = 80; }
+          { addr = ip; port = 443; ssl = true; http2 = enableHttp2; }
+        ];
+      in
+      if ips == null then [
+        { addr = "0.0.0.0"; port = 80; }
+        { addr = "0.0.0.0"; port = 443; ssl = true; http2 = enableHttp2; }
+        { addr = "[::]"; port = 80; }
+        { addr = "[::]"; port = 443; ssl = true; http2 = enableHttp2; }
+      ] else lib.flatten (map mk ips);
+  in
+  {
     enable = true;
 
     recommendedGzipSettings = true;
@@ -181,6 +202,8 @@ in
 
       # DNS-01: don't set up HTTP-01 webroot
       acmeRoot = null;
+
+      listen = mkListen v;
 
       locations = mkLocations host v;
       extraConfig = v.extraConfig or "";
