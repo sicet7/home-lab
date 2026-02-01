@@ -53,9 +53,20 @@ in
     CacheFromLocalhost=true
   '';
 
-  systemd.tmpfiles.rules = [
-    "f /run/secrets/cf_dns_api_token 0400 root root - ${cloudflareDnsApiToken}"
-  ];
+  systemd.tmpfiles.rules =
+    let
+      upstreamCaRules =
+        lib.flatten (lib.mapAttrsToList (host: v:
+          let ca = (v.upstreamTls.trustedCaPem or null);
+          in lib.optional (ca != null)
+            "f /run/nginx-upstream-cas/${host}.pem 0444 root root - ${ca}"
+        ) domains);
+    in
+    [
+      "d /run/secrets 0750 root root - -"
+      "d /run/nginx-upstream-cas 0755 root root - -"
+      "f /run/secrets/cf_dns_api_token 0400 root root - ${cloudflareDnsApiToken}"
+    ] ++ upstreamCaRules;
 
   security.acme = let
     acmeServer =
@@ -95,7 +106,36 @@ in
       proxy_send_timeout 3600s;
     '';
 
-    mkLocations = v:
+    # Add upstream TLS bits only if upstream is https://
+    mkUpstreamTlsConfig = host: v:
+      let
+        tls = v.upstreamTls or null;
+        verify = tls != null && (tls.verify or false);
+        hasCa = tls != null && (tls.trustedCaPem or null) != null;
+
+        # If serverName is set, use it for SNI + hostname verification.
+        # Otherwise, default to $proxy_host (host from proxy_pass).
+        sniName =
+          if tls != null && (tls.serverName or null) != null
+          then tls.serverName
+          else "$proxy_host";
+
+        caPath = "/run/nginx-upstream-cas/${host}.pem";
+      in
+        lib.optionalString (lib.hasPrefix "https://" v.upstream) ''
+          proxy_ssl_server_name on;
+          proxy_ssl_name ${sniName};
+
+          ${if verify then ''
+            proxy_ssl_verify on;
+            ${lib.optionalString hasCa "proxy_ssl_trusted_certificate ${caPath};"}
+            # proxy_ssl_verify_depth 2;
+          '' else ''
+            proxy_ssl_verify off;
+          ''}
+        '';
+
+    mkLocations = host: v:
       let
         extraLocs =
           lib.mapAttrs
@@ -103,6 +143,7 @@ in
               proxyPass = v.upstream;
               extraConfig = ''
                 ${websocketProxyBits}
+                ${mkUpstreamTlsConfig host v}
                 ${loc.extraConfig or ""}
               '';
             })
@@ -113,6 +154,7 @@ in
           proxyPass = v.upstream;
           extraConfig = ''
             ${websocketProxyBits}
+            ${mkUpstreamTlsConfig host v}
           '';
         };
       } // extraLocs);
@@ -127,7 +169,7 @@ in
     appendHttpConfig = ''
       map $http_upgrade $connection_upgrade {
         default upgrade;
-        ""      close;
+        "" close;
       }
     '';
 
@@ -140,7 +182,7 @@ in
       # DNS-01: don't set up HTTP-01 webroot
       acmeRoot = null;
 
-      locations = mkLocations v;
+      locations = mkLocations host v;
       extraConfig = v.extraConfig or "";
     }) domains;
   };
