@@ -4,11 +4,12 @@ let
   # false => Let's Encrypt production
   acmeUseStaging = true;
   acmeEmail = "you@example.com";
-  cloudflareDnsApiToken = "PASTE_TOKEN_HERE";
+  gandiPersonalAccessToken = "PASTE_TOKEN_HERE";
 
   domains = {
     "example.com" = {
       upstream = "http://10.0.0.20:8080";
+      # upstreamTls.verify = false;
       extraConfig = ''
         client_max_body_size 2g;
         proxy_read_timeout 3600s;
@@ -65,7 +66,7 @@ in
     [
       "d /run/secrets 0750 root root - -"
       "d /run/nginx-upstream-cas 0755 root root - -"
-      "f /run/secrets/cf_dns_api_token 0400 root root - ${cloudflareDnsApiToken}"
+      "f /run/secrets/gandi_pat 0400 root root - ${gandiPersonalAccessToken}"
     ] ++ upstreamCaRules;
 
   security.acme = let
@@ -79,11 +80,12 @@ in
     defaults = {
       email = acmeEmail;
       server = acmeServer;
-      dnsProvider = "cloudflare";
+      dnsProvider = "gandiv5";
 
       # lego supports *_FILE vars; NixOS wires these via systemd credentials
       credentialFiles = {
-        "CF_DNS_API_TOKEN_FILE" = "/run/secrets/cf_dns_api_token";
+        "GANDIV5_PERSONAL_ACCESS_TOKEN_FILE" = "/run/secrets/gandi_pat";
+        "GANDIV5_API_KEY_FILE"              = "/run/secrets/gandi_pat";
       };
     };
 
