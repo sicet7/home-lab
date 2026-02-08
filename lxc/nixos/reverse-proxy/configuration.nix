@@ -85,7 +85,6 @@ in
       # lego supports *_FILE vars; NixOS wires these via systemd credentials
       credentialFiles = {
         "GANDIV5_PERSONAL_ACCESS_TOKEN_FILE" = "/run/secrets/gandi_pat";
-        "GANDIV5_API_KEY_FILE"              = "/run/secrets/gandi_pat";
       };
     };
 
