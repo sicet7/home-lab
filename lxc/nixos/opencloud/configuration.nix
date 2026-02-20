@@ -146,7 +146,7 @@ in
       opencloud = {
         autoStart = true;
         hostname = "opencloud";
-        image = "docker.io/opencloudeu/opencloud-rolling:4.1";
+        image = "docker.io/opencloudeu/opencloud-rolling:5.1";
 
         environment = {
           # --- Base ---
@@ -233,7 +233,7 @@ in
       collabora = {
         autoStart = true;
         hostname = "collabora";
-        image = "docker.io/collabora/code:25.04.7.1.1";
+        image = "docker.io/collabora/code:25.04.9.1.1";
 
         entrypoint = "/bin/bash";
 
@@ -285,7 +285,7 @@ in
 
       collaboration = {
         autoStart = true;
-        image = "docker.io/opencloudeu/opencloud-rolling:4.1";
+        image = "docker.io/opencloudeu/opencloud-rolling:5.1";
 
         entrypoint = "/bin/sh";
         cmd = [ "-c" "opencloud collaboration server" ];
