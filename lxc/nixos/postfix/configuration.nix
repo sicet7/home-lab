@@ -3,10 +3,12 @@ let
   postfix = {
     username = "<local-smtp-username>";
     password = "<local-smtp-password>";
-    gmailAddress = "<gmail-login-address>";
-    gmailAppPassword = "<gmail-app-password>";
+    remoteSmtpHost = "<remote-smtp-host>";
+    remoteSmtpPort = "<remote-smtp-port>";
+    remoteSmtpUsername = "<remote-smtp-username>";
+    remoteSmtpPassword = "<remote-smtp-password>";
     listenInterface = "<ipv4-to-listen-for-local-smtp-clients-on>";
-    externalInterface = "<ipv4-to-connect-to-gmail-via>";
+    externalInterface = "<ipv4-to-connect-to-remote-smtp-via>";
     hostname = "mail.local";
     domain = "local";
   };
@@ -46,7 +48,7 @@ in
     enableSmtp = true;
 
     mapFiles.sasl_passwd = pkgs.writeText "sasl_passwd" ''
-      [smtp.gmail.com]:587 ${postfix.gmailAddress}:${postfix.gmailAppPassword}
+      [${postfix.remoteSmtpHost}]:${postfix.remoteSmtpPort} ${postfix.remoteSmtpUsername}:${postfix.remoteSmtpPassword}
     '';
 
     settings.main = {
@@ -56,8 +58,8 @@ in
 
       inet_protocols = "ipv4";
 
-      # Gmail relayhost is a LIST in 25.11
-      relayhost = [ "[smtp.gmail.com]:587" ];
+      # SMTP relayhost is a LIST in 25.11
+      relayhost = [ "[${postfix.remoteSmtpHost}]:${postfix.remoteSmtpPort}" ];
 
       # Cosmetic identity
       myhostname = postfix.hostname;
@@ -80,12 +82,12 @@ in
       smtpd_client_restrictions = "permit_sasl_authenticated,reject";
       smtpd_recipient_restrictions = "permit_sasl_authenticated,reject";
 
-      # --- Gmail relay auth (outbound) ---
+      # --- mail relay auth (outbound) ---
       smtp_sasl_auth_enable = "yes";
       smtp_sasl_security_options = "noanonymous";
       smtp_sasl_password_maps = "hash:/etc/postfix/sasl_passwd";
 
-      # --- TLS to Gmail ---
+      # --- TLS to SMTP server ---
       smtp_use_tls = "yes";
       smtp_tls_security_level = "encrypt";
       smtp_tls_CAfile = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
